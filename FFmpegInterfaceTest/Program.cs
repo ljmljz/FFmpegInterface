@@ -28,6 +28,10 @@ namespace Test
             play();
 
             Console.WriteLine("Playing");
+            for(;;)
+            {
+                
+            }
         }
     }
 }

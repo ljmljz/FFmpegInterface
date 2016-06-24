@@ -108,7 +108,7 @@ int DLL_EXPORT FFMPEG_API init() {
 	}
 
 	//poll_event();
-	SDL_Thread *poll_thread = SDL_CreateThread(poll_event, NULL);
+	state->event_thread = SDL_CreateThread(poll_event, NULL);
 	return 0;
 }
 
@@ -129,7 +129,7 @@ int DLL_EXPORT FFMPEG_API prepare(char *uri) {
 
 	//state->prepare_thread = SDL_CreateThread(prepare_from_thread, state);
 	prepare_from_thread((void*)state);
-	state->decode_thread = SDL_CreateThread(decode_from_thread, state);
+	//state->decode_thread = SDL_CreateThread(decode_from_thread, state);
 
 	return 0;
 }
@@ -329,7 +329,7 @@ int audio_decode_frame(FFmpegState *st) {
 
 			if (!got_frame)
 				continue;
-			
+
 			decoded_data_size = av_samples_get_buffer_size(NULL,
 				st->aFrame->channels,
 				st->aFrame->nb_samples,
@@ -440,17 +440,16 @@ int poll_event(void *userdata) {
 	SDL_Event event;
 
 	while (1) {
-		while (SDL_PollEvent(&event)) {
-			switch (event.type) {
-			case FF_EVENT_PREPARED:
-				st = (FFmpegState*)event.user.data1;
-				st->decode_thread = SDL_CreateThread(decode_from_thread, st);
-				break;
-			case FF_EVENT_ERROR:
-				st = (FFmpegState*)event.user.data1;
-			default:
-				break;
-			}
+		SDL_WaitEvent(&event);
+		switch (event.type) {
+		case FF_EVENT_PREPARED:
+			st = (FFmpegState*)event.user.data1;
+			st->decode_thread = SDL_CreateThread(decode_from_thread, st);
+			break;
+		case FF_EVENT_ERROR:
+			st = (FFmpegState*)event.user.data1;
+		default:
+			break;
 		}
 	}
 }

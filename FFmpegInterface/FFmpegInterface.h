@@ -101,6 +101,7 @@ typedef struct FFmpegState {
 	struct SwrContext *swr;
 	SDL_Thread      *decode_thread;
 	SDL_Thread      *prepare_thread;
+	SDL_Thread		*event_thread;
 	int             quit;
 } FFmpegState;
 
