@@ -66,6 +66,18 @@ typedef enum {
 	FF_EVENT_ERROR,
 } EventType;
 
+typedef enum {
+	FF_STATUS_IDLE = 0,
+	FF_STATUS_INITIALIZED,
+	FF_STATUS_PREPARING,
+	FF_STATUS_PREPARED,
+	FF_STATUS_PLAYING,
+	FF_STATUS_PAUSED,
+	FF_STATUS_STOPPED,
+	FF_STATUS_COMPLETED,
+	FF_STATUS_ERROR = 100
+} StatusType;
+
 typedef struct PacketQueue {
 	AVPacketList *first_pkt, *last_pkt;
 	int nb_packets;
@@ -102,7 +114,8 @@ typedef struct FFmpegState {
 	SDL_Thread      *decode_thread;
 	SDL_Thread      *prepare_thread;
 	SDL_Thread		*event_thread;
-	int             quit;
+	int				quit;
+	int				status;
 } FFmpegState;
 
 
@@ -118,14 +131,14 @@ extern "C" {
 	int DLL_EXPORT FFMPEG_API init();
 	void DLL_EXPORT FFMPEG_API release();
 	int DLL_EXPORT FFMPEG_API prepare(char *uri);
+	void DLL_EXPORT FFMPEG_API play();
+	int DLL_EXPORT FFMPEG_API get_status();
+
 	int audio_decode_frame(FFmpegState *st);
 	int prepare_from_thread(void *userdata);
 	static int decode_from_thread(void *userdata);
-	void DLL_EXPORT FFMPEG_API play();
 
 	void audio_callback(void *userdata, Uint8 *stream, int len);
-	void push_event(Uint8 type, void *userdata);
-	int poll_event(void *userdata);
 
 #ifdef __cplusplus
 };

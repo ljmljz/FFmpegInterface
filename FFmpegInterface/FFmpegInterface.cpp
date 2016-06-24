@@ -100,6 +100,7 @@ int DLL_EXPORT FFMPEG_API init() {
 
 	// Allocate memory for the state.
 	state = (FFmpegState *)av_mallocz(sizeof(FFmpegState));
+	state->status = FF_STATUS_IDLE;
 	// Register all codec
 	av_register_all();
 
@@ -107,8 +108,8 @@ int DLL_EXPORT FFMPEG_API init() {
 		return -1;
 	}
 
-	//poll_event();
-	state->event_thread = SDL_CreateThread(poll_event, NULL);
+	state->status = FF_STATUS_INITIALIZED;
+
 	return 0;
 }
 
@@ -127,9 +128,8 @@ int DLL_EXPORT FFMPEG_API prepare(char *uri) {
 
 	strncpy(state->filename, uri, sizeof(state->filename));
 
-	//state->prepare_thread = SDL_CreateThread(prepare_from_thread, state);
-	prepare_from_thread((void*)state);
-	//state->decode_thread = SDL_CreateThread(decode_from_thread, state);
+	state->prepare_thread = SDL_CreateThread(prepare_from_thread, state);
+	//prepare_from_thread((void*)state);
 
 	return 0;
 }
@@ -144,13 +144,11 @@ int prepare_from_thread(void *userdata) {
 
 	// Open audio file
 	if (avformat_open_input(&st->aFormatCtx, st->filename, NULL, NULL) != 0) {
-		push_event(FF_EVENT_ERROR, st);
 		return ERROR_OPEN_FILE;
 	}
 
 	// Retrieve stream information
 	if (avformat_find_stream_info(st->aFormatCtx, NULL) < 0) {
-		push_event(FF_EVENT_ERROR, st);
 		return ERROR_FIND_STREAM_INFO;
 	}
 
@@ -164,8 +162,6 @@ int prepare_from_thread(void *userdata) {
 		}
 	}
 	if (st->audioStream == -1) {
-		//return -1;
-		push_event(FF_EVENT_ERROR, st);
 		return ERORR_FIND_AUDIO_STREAM;
 	}
 
@@ -252,12 +248,14 @@ int prepare_from_thread(void *userdata) {
 	packet_queue_init(&st->audioq);
 
 	// Raise Prepared event
-	push_event(FF_EVENT_PREPARED, st);
+	//push_event(FF_EVENT_PREPARED, st);
 	// ·µ»Øsample rateºÍchannels
 	//st->sample_rate = st->aCodecCtx->sample_rate;
 	//st->channels = st->aCodecCtx->channels;
 
-	//audio->status = MEDIA_PLAYER_PREPARED;
+	state->decode_thread = SDL_CreateThread(decode_from_thread, state);
+
+	st->status = FF_STATUS_PREPARED;
 	//audio->event_callback(MEDIA_PREPARED, NONE, NONE);
 
 	return 0;
@@ -424,32 +422,10 @@ void audio_callback(void *userdata, Uint8 *stream, int len) {
 
 void DLL_EXPORT FFMPEG_API play() {
 	SDL_PauseAudio(0);
+	state->status = FF_STATUS_PLAYING;
 }
 
-void push_event(Uint8 type, void* userdata) {
-	SDL_Event event;
-
-	event.type = type;
-	event.user.data1 = userdata;
-
-	SDL_PushEvent(&event);
-}
-
-int poll_event(void *userdata) {
-	FFmpegState *st;
-	SDL_Event event;
-
-	while (1) {
-		SDL_WaitEvent(&event);
-		switch (event.type) {
-		case FF_EVENT_PREPARED:
-			st = (FFmpegState*)event.user.data1;
-			st->decode_thread = SDL_CreateThread(decode_from_thread, st);
-			break;
-		case FF_EVENT_ERROR:
-			st = (FFmpegState*)event.user.data1;
-		default:
-			break;
-		}
-	}
+int DLL_EXPORT FFMPEG_API get_status()
+{
+	return state->status;
 }

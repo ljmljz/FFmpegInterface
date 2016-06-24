@@ -1,36 +1,32 @@
 ﻿using System;
 using System.Collections.Generic;
 using System.Linq;
-using System.Runtime.InteropServices;
 using System.Text;
 using System.Threading.Tasks;
 
-namespace Test
+namespace FFmpegInterfaceTest
 {
     class Program
     {
-        [DllImport("FFmpegInterface")]
-        public extern static int init();
-
-        [DllImport("FFmpegInterface")]
-        public extern static int prepare(StringBuilder uri);
-
-        [DllImport("FFmpegInterface")]
-        public extern static void play();
-
         static void Main(string[] args)
         {
             StringBuilder uri = new StringBuilder(255);
-            uri.Append("D:\\My Documents\\00.mp3");
+            FFmpegInterface.FFStatus status;
+            uri.Append("..\\..\\..\\res\\yzcw.mp3");
 
-            init();
-            int ret = prepare(uri);
-            play();
+            FFmpegInterface.init();
+            int ret = FFmpegInterface.prepare(uri);
+            //play();
 
-            Console.WriteLine("Playing");
+            Console.WriteLine("Prepareing");
             for(;;)
             {
-                
+                status = FFmpegInterface.get_status();
+                if (status == FFmpegInterface.FFStatus.FF_STATUS_PREPARED)
+                {
+                    FFmpegInterface.play();
+                    Console.WriteLine("Playing");
+                }
             }
         }
     }

@@ -21,7 +21,7 @@
   <PropertyGroup Label="Globals">
     <ProjectGuid>{D77A2E6F-EDB2-464A-833C-1B604E81D030}</ProjectGuid>
     <Keyword>Win32Proj</Keyword>
-    <RootNamespace>FFmpegTest</RootNamespace>
+    <RootNamespace>FFmpegInterface</RootNamespace>
     <WindowsTargetPlatformVersion>8.1</WindowsTargetPlatformVersion>
     <ProjectName>FFmpegInterface</ProjectName>
   </PropertyGroup>
@@ -95,7 +95,7 @@
     <Link>
       <SubSystem>Windows</SubSystem>
       <GenerateDebugInformation>true</GenerateDebugInformation>
-      <AdditionalLibraryDirectories>$(SolutionDir)dep\SDL\lib\x86;$(SolutionDir)dep\ffmpeg\lib;%(AdditionalLibraryDirectories)</AdditionalLibraryDirectories>
+      <AdditionalLibraryDirectories>$(SolutionDir)dep\SDL\lib\;$(SolutionDir)dep\ffmpeg\lib;%(AdditionalLibraryDirectories)</AdditionalLibraryDirectories>
     </Link>
   </ItemDefinitionGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">
