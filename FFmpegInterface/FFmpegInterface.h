@@ -46,14 +46,20 @@ extern "C" {
 
 #define AVCODEC_MAX_AUDIO_FRAME_SIZE 192000
 
-enum {
+typedef enum {
 	ERROR_NONE = 0x0000,
-	ERROR_OPEN_FILE = 0x0001,
-	ERROR_FIND_STREAM_INFO = 0x0002,
-	ERORR_FIND_AUDIO_STREAM = 0x0003,
-	ERROR_UNSUPPORTED_CODEC = 0x0004,
-	ERROR_OPEN_CODEC = 0x0005,
-};
+
+	ERROR_SDL_INIT,
+
+	ERROR_OPEN_FILE,
+	ERROR_FIND_STREAM_INFO,
+	ERORR_FIND_AUDIO_STREAM,
+	ERROR_UNSUPPORTED_CODEC,
+	ERROR_OPEN_CODEC,
+
+	ERROR_INVALID_SAMPLE_RATE_CHANNEL,
+	ERROR_SDL_OPEN_AUDIO,
+} ErrorType;
 
 typedef enum {
 	FF_EVENT_NOP = SDL_USEREVENT, // interface test message
@@ -116,6 +122,7 @@ typedef struct FFmpegState {
 	SDL_Thread		*event_thread;
 	int				quit;
 	int				status;
+	int				error;
 } FFmpegState;
 
 

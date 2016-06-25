@@ -22,10 +22,16 @@ namespace FFmpegInterfaceTest
             for(;;)
             {
                 status = FFmpegInterface.get_status();
-                if (status == FFmpegInterface.FFStatus.FF_STATUS_PREPARED)
+                switch(status)
                 {
-                    FFmpegInterface.play();
-                    Console.WriteLine("Playing");
+                    case FFmpegInterface.FFStatus.FF_STATUS_PREPARED:
+                        FFmpegInterface.play();
+                        Console.WriteLine("Playing");
+                        break;
+                    case FFmpegInterface.FFStatus.FF_STATUS_ERROR:
+                        break;
+                    default:
+                        break;
                 }
             }
         }

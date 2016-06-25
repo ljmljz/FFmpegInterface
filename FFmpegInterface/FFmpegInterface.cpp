@@ -100,11 +100,27 @@ int DLL_EXPORT FFMPEG_API init() {
 
 	// Allocate memory for the state.
 	state = (FFmpegState *)av_mallocz(sizeof(FFmpegState));
+
+	state->aFormatCtx = NULL;
+	state->aCodecCtx = NULL;
+	state->aFrame = NULL;
+
+	state->audio_pkt_data = NULL;
+	state->audio_buf = NULL;
+	state->audio_buf1 = NULL;
+
+	state->swr = NULL;
+
+	state->quit = 0;
 	state->status = FF_STATUS_IDLE;
+
 	// Register all codec
 	av_register_all();
 
 	if (SDL_Init(SDL_INIT_AUDIO)) {
+		state->error = ERROR_SDL_INIT;
+		state->status = FF_STATUS_ERROR;
+
 		return -1;
 	}
 
@@ -115,6 +131,8 @@ int DLL_EXPORT FFMPEG_API init() {
 
 int DLL_EXPORT FFMPEG_API prepare(char *uri) {
 	if (!uri) {
+		state->error = ERROR_OPEN_FILE;
+		state->status = FF_STATUS_ERROR;
 		return -1;
 	}
 
@@ -144,11 +162,15 @@ int prepare_from_thread(void *userdata) {
 
 	// Open audio file
 	if (avformat_open_input(&st->aFormatCtx, st->filename, NULL, NULL) != 0) {
+		st->error = ERROR_OPEN_FILE;
+		st->status = FF_STATUS_ERROR;
 		return ERROR_OPEN_FILE;
 	}
 
 	// Retrieve stream information
 	if (avformat_find_stream_info(st->aFormatCtx, NULL) < 0) {
+		st->error = ERROR_FIND_STREAM_INFO;
+		st->status = FF_STATUS_ERROR;
 		return ERROR_FIND_STREAM_INFO;
 	}
 
@@ -162,6 +184,8 @@ int prepare_from_thread(void *userdata) {
 		}
 	}
 	if (st->audioStream == -1) {
+		st->error = ERORR_FIND_AUDIO_STREAM;
+		st->status = FF_STATUS_ERROR;
 		return ERORR_FIND_AUDIO_STREAM;
 	}
 
@@ -171,10 +195,14 @@ int prepare_from_thread(void *userdata) {
 	// Find the decoder for the audio stream
 	AVCodec *aCodec = avcodec_find_decoder(st->aCodecCtx->codec_id);
 	if (!aCodec) {
+		st->error = ERROR_UNSUPPORTED_CODEC;
+		st->status = FF_STATUS_ERROR;
 		return ERROR_UNSUPPORTED_CODEC;
 	}
 
 	if (avcodec_open2(st->aCodecCtx, aCodec, NULL) < 0) {
+		st->error = ERROR_OPEN_CODEC;
+		st->status = FF_STATUS_ERROR;
 		return ERROR_OPEN_CODEC;
 	}
 
@@ -428,4 +456,12 @@ void DLL_EXPORT FFMPEG_API play() {
 int DLL_EXPORT FFMPEG_API get_status()
 {
 	return state->status;
+}
+
+void DLL_EXPORT FFMPEG_API release()
+{
+	state->quit = 1;
+	SDL_Quit();
+
+	av_free(state);
 }
