@@ -32,6 +32,9 @@ namespace FFmpegInterfaceTest
         public extern static void play();
 
         [DllImport("FFmpegInterface")]
-        public extern static FFStatus get_status();
+        public extern static FFStatus getStatus();
+
+        [DllImport("FFmpegInterface")]
+        public extern static int setWaveDataBuffer(byte[] buffer, UInt16 max_size, ref UInt16 actual_size);
     }
 }

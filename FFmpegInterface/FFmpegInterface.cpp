@@ -382,6 +382,7 @@ int audio_decode_frame(FFmpegState *st) {
 					}
 				}
 
+				// SWR Convert
 				len2 = swr_convert(st->swr, out,
 					sizeof(st->audio_buf2)
 					/ st->audio_tgt_channels
@@ -391,10 +392,12 @@ int audio_decode_frame(FFmpegState *st) {
 					fprintf(stderr, "swr_convert() failed\n");
 					break;
 				}
+
 				if (len2 == sizeof(st->audio_buf2) / st->audio_tgt_channels / av_get_bytes_per_sample(st->audio_tgt_fmt)) {
 					fprintf(stderr, "warning: audio buffer is probably too small\n");
 					swr_init(st->swr);
 				}
+
 				st->audio_buf = st->audio_buf2;
 				resampled_data_size = len2 * st->audio_tgt_channels * av_get_bytes_per_sample(st->audio_tgt_fmt);
 			}
@@ -402,6 +405,12 @@ int audio_decode_frame(FFmpegState *st) {
 				resampled_data_size = decoded_data_size;
 				st->audio_buf = st->aFrame->data[0];
 			}
+
+			// Update the wave buffer
+			if (st->wave) {
+				update_wave_buffer(st->audio_buf, resampled_data_size);
+			}
+
 			// We have data, return it and come back for more later
 			return resampled_data_size;
 		}
@@ -453,7 +462,7 @@ void DLL_EXPORT FFMPEG_API play() {
 	state->status = FF_STATUS_PLAYING;
 }
 
-int DLL_EXPORT FFMPEG_API get_status()
+int DLL_EXPORT FFMPEG_API getStatus()
 {
 	return state->status;
 }
@@ -463,5 +472,46 @@ void DLL_EXPORT FFMPEG_API release()
 	state->quit = 1;
 	SDL_Quit();
 
+	free(state->wave->tmp_buffer);
+	free(state->wave);
+
 	av_free(state);
+}
+
+int DLL_EXPORT FFMPEG_API setWaveDataBuffer(uint8_t *wave, unsigned int max_size, unsigned int *actual_size)
+{
+	if (!wave || max_size <= 0 || !actual_size) {
+		return -1;
+	}
+
+	state->wave = (WaveBuffer*)malloc(sizeof(WaveBuffer));
+	state->wave->out_buffer = wave;
+	state->wave->tmp_buffer = (uint8_t*)malloc(max_size);
+	state->wave->max_size = max_size;
+	state->wave->out_size = actual_size;
+	state->wave->index = 0;
+
+	state->wave->mutex = SDL_CreateMutex();
+
+	return 0;
+}
+
+void update_wave_buffer(uint8_t *buffer, unsigned int size) {
+	SDL_LockMutex(state->wave->mutex);
+
+	if (state->wave->index + size > state->wave->max_size) {
+		memset(state->wave->out_buffer, 0, state->wave->max_size);
+		memcpy(state->wave->out_buffer, state->wave->tmp_buffer, state->wave->index);
+		*state->wave->out_size = state->wave->index;
+
+		memset(state->wave->tmp_buffer, 0, state->wave->max_size);
+		memcpy(state->wave->tmp_buffer, buffer, size);
+		state->wave->index = size;
+	}
+	else {
+		memcpy((uint8_t*)state->wave->tmp_buffer + state->wave->index, buffer, size);
+		state->wave->index += size;
+	}
+
+	SDL_UnlockMutex(state->wave->mutex);
 }

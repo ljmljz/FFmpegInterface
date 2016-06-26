@@ -14,19 +14,27 @@ namespace FFmpegInterfaceTest
             FFmpegInterface.FFStatus status;
             uri.Append("..\\..\\..\\res\\yzcw.mp3");
 
+            byte[] waveBuffer = new byte[8192];
+            UInt16 actualSize = 0;
+            StringBuilder sb = new StringBuilder();
+
             FFmpegInterface.init();
+            FFmpegInterface.setWaveDataBuffer(waveBuffer, 8192, ref actualSize);
             int ret = FFmpegInterface.prepare(uri);
             //play();
 
             Console.WriteLine("Prepareing");
             for(;;)
             {
-                status = FFmpegInterface.get_status();
+                status = FFmpegInterface.getStatus();
                 switch(status)
                 {
                     case FFmpegInterface.FFStatus.FF_STATUS_PREPARED:
                         FFmpegInterface.play();
                         Console.WriteLine("Playing");
+                        break;
+                    case FFmpegInterface.FFStatus.FF_STATUS_PLAYING:
+                        
                         break;
                     case FFmpegInterface.FFStatus.FF_STATUS_ERROR:
                         break;

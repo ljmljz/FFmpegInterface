@@ -92,6 +92,17 @@ typedef struct PacketQueue {
 	SDL_cond *cond;
 } PacketQueue;
 
+typedef struct {
+	uint8_t *out_buffer;
+	uint8_t *tmp_buffer;
+
+	unsigned int max_size;
+	unsigned int *out_size;
+	unsigned int index;
+
+	SDL_mutex *mutex;
+} WaveBuffer;
+
 typedef struct FFmpegState {
 	char            filename[1024];
 	AVFormatContext *aFormatCtx;
@@ -108,6 +119,10 @@ typedef struct FFmpegState {
 	uint8_t         *audio_buf;
 	uint8_t         *audio_buf1;
 	DECLARE_ALIGNED(16, uint8_t, audio_buf2)[AVCODEC_MAX_AUDIO_FRAME_SIZE * 4];
+	
+	WaveBuffer		*wave;
+	WaveBuffer		*fft;
+
 	enum AVSampleFormat  audio_src_fmt;
 	enum AVSampleFormat  audio_tgt_fmt;
 	int             audio_src_channels;
@@ -139,13 +154,16 @@ extern "C" {
 	void DLL_EXPORT FFMPEG_API release();
 	int DLL_EXPORT FFMPEG_API prepare(char *uri);
 	void DLL_EXPORT FFMPEG_API play();
-	int DLL_EXPORT FFMPEG_API get_status();
+	int DLL_EXPORT FFMPEG_API getStatus();
+	int DLL_EXPORT FFMPEG_API setWaveDataBuffer(uint8_t *wave, unsigned int max_size, unsigned int *actual_size);
+	void DLL_EXPORT FFMPEG_API setFFTDataBuffer(uint8_t *fft, int size);
 
 	int audio_decode_frame(FFmpegState *st);
 	int prepare_from_thread(void *userdata);
 	static int decode_from_thread(void *userdata);
 
 	void audio_callback(void *userdata, Uint8 *stream, int len);
+	void update_wave_buffer(uint8_t *buffer, unsigned int size);
 
 #ifdef __cplusplus
 };
