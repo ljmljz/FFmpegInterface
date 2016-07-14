@@ -11,9 +11,11 @@ extern "C" {
 #include <libavutil/avstring.h>
 #include <libavutil/pixfmt.h>
 #include <libavutil/log.h>
+#include <libavcodec/avfft.h>
 
 #include <SDL.h>
 #include <SDL_thread.h>
+
 #ifdef __cplusplus
 };
 #endif // __cplusplus
@@ -97,11 +99,23 @@ typedef struct {
 	uint8_t *tmp_buffer;
 
 	unsigned int max_size;
-	unsigned int *out_size;
 	unsigned int index;
 
 	SDL_mutex *mutex;
 } WaveBuffer;
+
+typedef struct {
+	float *left_buffer;
+	float *right_buffer;
+
+	unsigned int max_size;
+
+	int nbits;
+	int window_size;
+	RDFTContext *ctx;
+
+	SDL_mutex *mutex;
+} FFTBuffer;
 
 typedef struct FFmpegState {
 	char            filename[1024];
@@ -121,7 +135,7 @@ typedef struct FFmpegState {
 	DECLARE_ALIGNED(16, uint8_t, audio_buf2)[AVCODEC_MAX_AUDIO_FRAME_SIZE * 4];
 	
 	WaveBuffer		*wave;
-	WaveBuffer		*fft;
+	FFTBuffer		*fft;
 
 	enum AVSampleFormat  audio_src_fmt;
 	enum AVSampleFormat  audio_tgt_fmt;
@@ -155,8 +169,7 @@ extern "C" {
 	int DLL_EXPORT FFMPEG_API prepare(char *uri);
 	void DLL_EXPORT FFMPEG_API play();
 	int DLL_EXPORT FFMPEG_API getStatus();
-	int DLL_EXPORT FFMPEG_API setWaveDataBuffer(uint8_t *wave, unsigned int max_size, unsigned int *actual_size);
-	void DLL_EXPORT FFMPEG_API setFFTDataBuffer(uint8_t *fft, int size);
+	int DLL_EXPORT FFMPEG_API setDataCaptureBuffer(uint8_t *pcm, float *left, float *right, unsigned int max_size);
 
 	int audio_decode_frame(FFmpegState *st);
 	int prepare_from_thread(void *userdata);
@@ -164,9 +177,9 @@ extern "C" {
 
 	void audio_callback(void *userdata, Uint8 *stream, int len);
 	void update_wave_buffer(uint8_t *buffer, unsigned int size);
+	void update_fft_buffer();
+	void fft_pre_normalize(float *value);
 
 #ifdef __cplusplus
 };
 #endif // __cplusplus
-
-int poll_event(void *userdata);

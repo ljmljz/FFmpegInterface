@@ -262,7 +262,8 @@ int prepare_from_thread(void *userdata) {
 		st->aCodecCtx->channel_layout,
 		st->aCodecCtx->sample_fmt,
 		st->aCodecCtx->sample_rate,
-		0, NULL);
+		0, 
+		NULL);
 	if (!st->swr || swr_init(st->swr) < 0) {
 		fprintf(stderr, "swr_init() failed\n");
 		return -1;
@@ -472,26 +473,53 @@ void DLL_EXPORT FFMPEG_API release()
 	state->quit = 1;
 	SDL_Quit();
 
-	free(state->wave->tmp_buffer);
-	free(state->wave);
+	if (state->wave)
+	{
+		free(state->wave->tmp_buffer);
+		free(state->wave);
+	}
+
+	if (state->fft) 
+	{
+		av_rdft_end(state->fft->ctx);
+		free(state->fft);
+	}
 
 	av_free(state);
 }
 
-int DLL_EXPORT FFMPEG_API setWaveDataBuffer(uint8_t *wave, unsigned int max_size, unsigned int *actual_size)
+int DLL_EXPORT FFMPEG_API setDataCaptureBuffer(uint8_t *pcm, float *left, float *right, unsigned int max_size)
 {
-	if (!wave || max_size <= 0 || !actual_size) {
+	if (max_size <= 0) {
 		return -1;
 	}
 
-	state->wave = (WaveBuffer*)malloc(sizeof(WaveBuffer));
-	state->wave->out_buffer = wave;
-	state->wave->tmp_buffer = (uint8_t*)malloc(max_size);
-	state->wave->max_size = max_size;
-	state->wave->out_size = actual_size;
-	state->wave->index = 0;
+	if (pcm) {
+		state->wave = (WaveBuffer*)malloc(sizeof(WaveBuffer));
+		state->wave->out_buffer = pcm;
+		state->wave->tmp_buffer = (uint8_t*)malloc(max_size);
+		state->wave->max_size = max_size;
+		state->wave->index = 0;
 
-	state->wave->mutex = SDL_CreateMutex();
+		state->wave->mutex = SDL_CreateMutex();
+	}
+
+	if (pcm && left && right) {
+		state->fft = (FFTBuffer*)malloc(sizeof(FFTBuffer));
+		state->fft->left_buffer = left;
+		state->fft->right_buffer = right;
+		state->fft->max_size = max_size;
+
+		// Init FFT
+		// max_size is uint8_t type data and we assume we have 2 channels.
+		state->fft->nbits = (int)log2(max_size / (sizeof(int16_t) * 2));
+		state->fft->window_size = 1 << state->fft->nbits;
+		state->fft->ctx = av_rdft_init(state->fft->nbits, DFT_R2C);
+
+		state->fft->mutex = SDL_CreateMutex();
+
+		return state->fft->window_size;
+	}
 
 	return 0;
 }
@@ -499,14 +527,16 @@ int DLL_EXPORT FFMPEG_API setWaveDataBuffer(uint8_t *wave, unsigned int max_size
 void update_wave_buffer(uint8_t *buffer, unsigned int size) {
 	SDL_LockMutex(state->wave->mutex);
 
-	if (state->wave->index + size > state->wave->max_size) {
-		memset(state->wave->out_buffer, 0, state->wave->max_size);
-		memcpy(state->wave->out_buffer, state->wave->tmp_buffer, state->wave->index);
-		*state->wave->out_size = state->wave->index;
+	if (state->wave->index + size >= state->wave->max_size) {
+		memcpy((uint8_t*)state->wave->tmp_buffer + state->wave->index, buffer, state->wave->max_size - state->wave->index);
+		//memset(state->wave->out_buffer, 0, state->wave->max_size);
+		memcpy(state->wave->out_buffer, state->wave->tmp_buffer, state->wave->max_size);
 
 		memset(state->wave->tmp_buffer, 0, state->wave->max_size);
-		memcpy(state->wave->tmp_buffer, buffer, size);
-		state->wave->index = size;
+		memcpy(state->wave->tmp_buffer, buffer, state->wave->index + size - state->wave->max_size);
+		state->wave->index = 0;
+
+		update_fft_buffer();
 	}
 	else {
 		memcpy((uint8_t*)state->wave->tmp_buffer + state->wave->index, buffer, size);
@@ -514,4 +544,60 @@ void update_wave_buffer(uint8_t *buffer, unsigned int size) {
 	}
 
 	SDL_UnlockMutex(state->wave->mutex);
+}
+
+void update_fft_buffer() {
+	if (!state->fft) {
+		return;
+	}
+
+	WaveBuffer *wave = state->wave;
+	FFTBuffer *fft = state->fft;
+	int16_t *s16 = (int16_t*)wave->out_buffer;
+	int16_t left;
+	int16_t right;
+
+	float *left_data = (float*)av_malloc(fft->window_size * sizeof(float));
+	float *right_data = (float*)av_malloc(fft->window_size * sizeof(float));
+	int i, tight_index;
+	double hann;
+	float value;
+
+	SDL_LockMutex(fft->mutex);
+
+	for (i = 0, tight_index = 0; i < fft->window_size*2; i += 2)
+	{
+		left = s16[i];
+		right = s16[i + 1];
+
+		hann = 0.5f * (1 - cos(2 * M_PI * tight_index / (fft->window_size - 1)));
+		value = (float)(hann * (left / 32768.0f));
+
+		// Cap values above 1 and below -1
+		fft_pre_normalize(&value);
+		left_data[tight_index] = value;
+
+		value = (float)(hann * (right / 32768.0f));
+		fft_pre_normalize(&value);
+		right_data[tight_index] = value;
+
+		tight_index++;
+	}
+
+	av_rdft_calc(fft->ctx, left_data);
+	av_rdft_calc(fft->ctx, right_data);
+
+	memcpy(fft->left_buffer, left_data, fft->window_size * sizeof(FFTSample));
+	memcpy(fft->right_buffer, right_data, fft->window_size * sizeof(FFTSample));
+
+	SDL_UnlockMutex(fft->mutex);
+}
+
+void fft_pre_normalize(float *value) {
+	if (*value > 1.0) {
+		*value = 1;
+	}
+	else if (*value < -1.0) {
+		*value = -1.0;
+	}
 }
